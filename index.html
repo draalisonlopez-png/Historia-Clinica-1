@@ -602,9 +602,28 @@ async function transcribeWhisper(file){
   return full;
 }
 async function whisperReq(file,key){
-  const form=new FormData();form.append('file',file);form.append('model','whisper-1');form.append('language','es');form.append('response_format','text');
+  // Normalizar el archivo — iOS genera M4A con tipo incorrecto; forzar nombre y tipo explícito
+  let finalFile=file;
+  const name=file.name||'audio';
+  const ext=name.split('.').pop().toLowerCase();
+  // Mapear tipos MIME correctos para Whisper
+  const mimeMap={'m4a':'audio/mp4','mp3':'audio/mpeg','wav':'audio/wav','ogg':'audio/ogg','webm':'audio/webm','mp4':'audio/mp4'};
+  const mime=mimeMap[ext]||file.type||'audio/mp4';
+  // Whisper requiere extensión reconocida — forzar .mp4 para M4A (mismo contenido, acepta mejor)
+  const whisperName=ext==='m4a'?name.replace('.m4a','.mp4'):name;
+  finalFile=new File([file],whisperName,{type:mime});
+
+  const form=new FormData();
+  form.append('file',finalFile);
+  form.append('model','whisper-1');
+  form.append('language','es');
+  form.append('response_format','text');
   const r=await fetch('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{'Authorization':'Bearer '+key},body:form});
-  if(!r.ok)throw new Error('Whisper: '+(await r.text()));return await r.text();
+  if(!r.ok){
+    const errText=await r.text();
+    throw new Error('Whisper error: '+errText);
+  }
+  return await r.text();
 }
 
 // ── CLAUDE ──
